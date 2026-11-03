@@ -93,7 +93,7 @@ python -m pytest
 
 ## Intégration continue
 
-GitHub Actions teste l'API et le Web et construit les images Docker sur les pull requests et les pushes vers `main`. Après une CI réussie sur un push de `main`, le workflow publie le Web sur Netlify et déclenche le déploiement de l'API sur Render.
+GitHub Actions teste l'API et le Web et construit les images Docker sur les pull requests et les pushes vers `main`. Pour une PR interne vers `main`, les trois jobs activent automatiquement la fusion squash : GitHub fusionne dès que les contrôles requis sont verts et que les autres règles de branche sont satisfaites. Les PR provenant d'un fork ne sont pas fusionnées automatiquement. Les pushes directs, force-push et suppressions de `main` restent bloqués. Après une fusion sur `main`, le workflow publie le Web sur Netlify et déclenche le déploiement de l'API sur Render.
 
 Pour préparer le déploiement :
 
@@ -109,7 +109,7 @@ Après avoir configuré le remote et poussé `main`, exécutez depuis la racine 
 .\.github\scripts\protect-main.ps1
 ```
 
-Le script GitHub CLI exige une pull request et une approbation, rend `API tests`, `Web checks` et `Docker build` obligatoires, et interdit les force-push et la suppression de `main`. Il faut disposer des droits d'administration sur le dépôt GitHub.
+Le script GitHub CLI exige une pull request, rend `API tests`, `Web checks` et `Docker build` obligatoires, permet la fusion automatique sans approbation obligatoire, et interdit les force-push et la suppression de `main`. Il active également l'auto-merge sur le dépôt. Il faut disposer des droits d'administration sur le dépôt GitHub.
 
 Test Meta réel optionnel (consomme des appels API), depuis `apps\api` :
 

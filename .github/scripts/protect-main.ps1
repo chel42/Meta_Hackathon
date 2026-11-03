@@ -13,7 +13,7 @@ $protection = @{
     enforce_admins                   = $true
     required_pull_request_reviews    = @{
         dismiss_stale_reviews           = $true
-        required_approving_review_count = 1
+        required_approving_review_count = 0
     }
     required_conversation_resolution = $true
     restrictions                     = $null
@@ -26,4 +26,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "GitHub refused to protect main. Check repository permissions and branch availability."
 }
 
-Write-Host "Protection enabled for ${repository}:main (PR review, required CI, no force push or deletion)."
+gh api --method PATCH "repos/$repository" --field allow_auto_merge=true --jq .allow_auto_merge
+if ($LASTEXITCODE -ne 0) {
+    throw "GitHub refused to enable repository auto-merge."
+}
+
+Write-Host "Protection enabled for ${repository}:main (PR required, CI required, auto-merge enabled, no force push or deletion)."
