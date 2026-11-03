@@ -94,7 +94,8 @@ class FakeProvider:
     async def describe_image(
         self, *, image_data_url: str, caption: str, timeout: float
     ) -> tuple[MediaAnalysis, Usage]:
-        del image_data_url, caption, timeout
+        del image_data_url, timeout
+        self.calls.append(("MediaAnalysis", caption))
         return MediaAnalysis(
             observations=["Image reçue pour description visuelle uniquement."],
             caption_consistency="unclear",

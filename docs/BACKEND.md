@@ -144,7 +144,7 @@ Les contrôles suivants ont été exécutés sur la stack Docker avec PostgreSQL
 - `docker compose config -q` : réussi ; les services `api` et `db` sont healthy et `web` est démarré.
 - `GET /api/v1/health` et `GET /api/docs` via Nginx : HTTP 200.
 - PostgreSQL : révision Alembic `0001_initial` et tables applicatives présentes. Une sonde temporaire a survécu à un redémarrage du conteneur DB ; la table-sonde a ensuite été supprimée.
-- Tests backend : `35 passed`. Newman : `28` requêtes, `124` assertions, `0` échec sur le passage final.
+- Tests backend : `47 passed` après intégration des tests de contrat Meta déjà fusionnés. Newman : `27` requêtes, `120` assertions, `0` échec sur le passage final après réconciliation avec `main`.
 - L'évaluation des 24 cas avec `MOCK_PROVIDER=1` donne 20/24 d'accord strict, 24/24 contrôles structurels de citations et 24/24 de cohérence des verdicts. Ces résultats vérifient le pipeline avec des données synthétiques, pas la véracité factuelle.
 
 | Ticket | État observé | À compléter |
@@ -158,7 +158,7 @@ Les contrôles suivants ont été exécutés sur la stack Docker avec PostgreSQL
 | B-07 | Validé par tests : run interrompu, gestion d'exécution et rejeu d'événements. | — |
 | B-08 | Validé par tests et Newman : soumission, run, statut et rapport. | — |
 | B-09 | Validé par tests et Newman : SSE, rejeu `Last-Event-ID` et accès via Nginx. | — |
-| B-10 | Validé : suite backend complète, 35 tests réussis. | — |
+| B-10 | Validé : suite backend complète, 47 tests réussis après intégration des tests de contrat Meta déjà fusionnés. | — |
 | B-11 | Runbook de démonstration disponible en mode mock. | Rejouer la démonstration sur l'environnement de présentation cible. |
 | B-12 | Validé par tests et Newman : profil, changement de mot de passe, suppression du compte et révocation des sessions. | — |
 | B-13 | Upload et validations d'image testés ; la provenance reste `not_assessed`. | Vérifier l'analyse et la cohérence image/légende avec le fournisseur réel ; ne pas tirer de conclusion de falsification. |

@@ -27,8 +27,8 @@ Le backend a été exécuté dans Docker avec PostgreSQL et Nginx en mode `FakeP
 
 - Routes health et docs via Nginx : HTTP 200.
 - Migration PostgreSQL `0001_initial`, tables applicatives et persistance après redémarrage vérifiées.
-- Tests backend : **35 passés**.
-- Newman : **28 requêtes, 124 assertions, 0 échec** au dernier passage.
+- Tests backend : **47 passés** après intégration des tests de contrat Meta déjà fusionnés.
+- Newman : **27 requêtes, 120 assertions, 0 échec** au dernier passage après réconciliation avec `main`.
 - Évaluation FakeProvider des 24 cas : **20/24** d'accord strict. Les contrôles structurels des citations et la cohérence des verdicts sont 24/24 ; les données simulées ne prouvent pas l'exactitude factuelle.
 
 Les appels Meta réels ne sont pas encore validés. Avant de conclure sur B-05, B-13, B-14 ou B-16, exécuter les essais réels avec des clés autorisées. Le Web Expo reste une page d'accueil, sans les parcours UI Beta.
@@ -101,13 +101,13 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-Dernière exécution locale : **35 passed**. Depuis la racine du dépôt, après démarrage de Docker :
+Dernière exécution locale : **47 passed** après intégration des tests de contrat Meta déjà fusionnés. Depuis la racine du dépôt, après démarrage de Docker :
 
 ```powershell
 npx newman run docs/postman/vera.postman_collection.json --reporters cli
 ```
 
-Dernière exécution Newman : **28 requêtes, 124 assertions, 0 échec**.
+Dernière exécution Newman : **27 requêtes, 120 assertions, 0 échec**.
 
 Évaluation reproductible en mode simulé, depuis `apps\api` :
 
