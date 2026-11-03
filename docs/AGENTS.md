@@ -121,6 +121,8 @@ Le mode `--three-claim-runs` exige les trois tarifs afin que le plafond `RUN_BUD
 
 ## 8. Tâches
 
+Les tests de contrat des surfaces Meta et du `FakeProvider` s'exécutent sans clé API depuis `apps/api` avec `python -m pytest tests/test_providers.py`.
+
 | ID | Tâche | Prio | Est. | Ticket parent | Critère d'acceptation |
 |---|---|---|---|---|---|
 | A-01 | Tests de fumée (section 7), réglage des paramètres | P0 | 1 h | B-05 | Tableau rempli, valeurs consignées |

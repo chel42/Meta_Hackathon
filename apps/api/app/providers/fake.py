@@ -1,8 +1,7 @@
-import json
-from collections import defaultdict, deque
+from collections import deque
 from typing import Any, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from app.schemas.agents import ClaimList, Investigation, MediaAnalysis
 from app.providers.base import Usage
@@ -39,7 +38,9 @@ class FakeProvider:
         del system_prompt, reasoning_effort, timeout
         self.calls.append((schema_name, user_prompt))
         queue = self.json_responses.get(schema_name)
-        if not queue:
+        if queue is not None and not queue:
+            raise ValueError(f"No fake response remaining for {schema_name}")
+        if queue is None:
             if schema_name == "ClaimList":
                 value: dict[str, Any] = {"claims": []}
             elif schema_name == "ClaimVerdict":
@@ -74,7 +75,8 @@ class FakeProvider:
     async def describe_image(
         self, *, image_data_url: str, caption: str, timeout: float
     ) -> tuple[MediaAnalysis, Usage]:
-        del image_data_url, caption, timeout
+        del image_data_url, timeout
+        self.calls.append(("MediaAnalysis", caption))
         return MediaAnalysis(
             observations=[],
             caption_consistency="unclear",
