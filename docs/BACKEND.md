@@ -85,7 +85,8 @@ Pipeline : **intake** → **extraction** (3 affirmations atomiques au plus ; les
   "media_analysis": null,
   "limits": ["…"],
   "advice": { "level": "verify_source", "text": "…" },
-  "trace": { "provider": "meta", "model": "muse-spark-1.3", "search_calls": 3, "budget_used": 0.12 }
+  "trace": { "provider": "meta", "model": "muse-spark-1.3", "search_calls": 3, "budget_used": 0.12,
+    "input_tokens": 4200, "output_tokens": 850 }
 }
 ```
 
@@ -107,7 +108,7 @@ Points de la documentation Meta à respecter :
 
 ## 9. Garde-fous
 
-Entrée ≤ 8 000 caractères ; 3 affirmations ; 2 recherches par affirmation ; 3 runs simultanés ; run limité à 180 s et 0,50 USD ; 20 soumissions par heure et par utilisateur ; image ≤ 5 Mo. Le backend **ne télécharge aucune URL** (elle est transmise à la recherche). Le contenu soumis et les pages web sont traités comme données non fiables ; toute sortie est validée par schéma ; les agents n'ont aucun outil à effet de bord. Conservation 7 jours ; journaux sans contenu intégral ; aucun secret dans le dépôt.
+Entrée ≤ 8 000 caractères ; 3 affirmations ; 2 recherches par affirmation ; 3 runs simultanés ; run limité à 180 s et 0,50 USD ; 20 soumissions par heure et par utilisateur ; image ≤ 5 Mo. Le backend **ne télécharge aucune URL** (elle est transmise à la recherche). Le contenu soumis et les pages web sont traités comme données non fiables ; toute sortie est validée par schéma ; les agents n'ont aucun outil à effet de bord. Conservation 7 jours, purge au démarrage puis toutes les heures ; journaux sans contenu intégral ; aucun secret dans le dépôt.
 
 ## 10. Tâches Backend
 
@@ -135,3 +136,34 @@ Total P0 : environ 35 h. **Chemin critique** : B-05 → B-06 → B-08 → B-11.
 ## 11. Définition de terminé (Beta)
 
 Un utilisateur crée un compte, soumet un texte, suit l'enquête en direct, ouvre une Preuve dont chaque source est consultable et contrôlée, puis la retrouve dans son historique. Un autre utilisateur ne peut pas y accéder. La démo de secours fonctionne sans clé Meta.
+
+## 12. État de validation backend (3 novembre 2026)
+
+Les contrôles suivants ont été exécutés sur la stack Docker avec PostgreSQL et Nginx :
+
+- `docker compose config -q` : réussi ; les services `api` et `db` sont healthy et `web` est démarré.
+- `GET /api/v1/health` et `GET /api/docs` via Nginx : HTTP 200.
+- PostgreSQL : révision Alembic `0001_initial` et tables applicatives présentes. Une sonde temporaire a survécu à un redémarrage du conteneur DB ; la table-sonde a ensuite été supprimée.
+- Tests backend : `35 passed`. Newman : `28` requêtes, `124` assertions, `0` échec sur le passage final.
+- L'évaluation des 24 cas avec `MOCK_PROVIDER=1` donne 20/24 d'accord strict, 24/24 contrôles structurels de citations et 24/24 de cohérence des verdicts. Ces résultats vérifient le pipeline avec des données synthétiques, pas la véracité factuelle.
+
+| Ticket | État observé | À compléter |
+|---|---|---|
+| B-01 | Validé : services Docker démarrés et routes health/docs accessibles. | — |
+| B-02 | Validé : migration Alembic et tables vérifiées dans PostgreSQL ; persistance vérifiée après redémarrage. | — |
+| B-03 | Validé par tests et parcours Newman : inscription, connexion, cookie et déconnexion. | — |
+| B-04 | Validé par tests : contrôle d'accès, isolation et erreurs d'authentification. | — |
+| B-05 | Fournisseurs et contrats implémentés ; tests simulés réussis. | Exécuter les tests de fumée Meta A-01/A-02 avec une clé autorisée et consigner schéma JSON, recherche, citations, coûts et latences. |
+| B-06 | Pipeline et preuve testés avec FakeProvider, dont les cas de contrat. | Confirmer les comportements avec des réponses Meta réelles. |
+| B-07 | Validé par tests : run interrompu, gestion d'exécution et rejeu d'événements. | — |
+| B-08 | Validé par tests et Newman : soumission, run, statut et rapport. | — |
+| B-09 | Validé par tests et Newman : SSE, rejeu `Last-Event-ID` et accès via Nginx. | — |
+| B-10 | Validé : suite backend complète, 35 tests réussis. | — |
+| B-11 | Runbook de démonstration disponible en mode mock. | Rejouer la démonstration sur l'environnement de présentation cible. |
+| B-12 | Validé par tests et Newman : profil, changement de mot de passe, suppression du compte et révocation des sessions. | — |
+| B-13 | Upload et validations d'image testés ; la provenance reste `not_assessed`. | Vérifier l'analyse et la cohérence image/légende avec le fournisseur réel ; ne pas tirer de conclusion de falsification. |
+| B-14 | Jeu de 24 cas, script et rapport reproductible présents ; FakeProvider : 20/24 d'accord strict. | Examiner les 4 divergences et refaire l'évaluation avec Meta ; les métriques synthétiques ne démontrent pas l'exactitude factuelle. |
+| B-15 | Validé par tests : suppression isolée, nettoyage des données liées et purge après sept jours. | — |
+| B-16 | Validé par tests simulés : fallback après 429/5xx et propagation des erreurs permanentes. | Vérifier l'intégration et l'usage comptabilisé avec les fournisseurs réels configurés. |
+
+Les tickets nécessitant un appel externe ne sont pas déclarés validés sur la seule base de FakeProvider. Aucun secret d'API ne doit être ajouté au dépôt ; configurer les clés dans l'environnement local avant les essais Meta.

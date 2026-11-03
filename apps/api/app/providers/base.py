@@ -14,6 +14,8 @@ class Usage:
     output_tokens: int = 0
     searches: int = 0
     reported: bool = True
+    provider: str | None = None
+    model: str | None = None
 
 
 class LLMProvider(Protocol):

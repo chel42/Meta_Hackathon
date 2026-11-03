@@ -26,9 +26,17 @@ class Investigator:
         retry, retry_usage = await self.provider.grounded_search(
             prompt=f"{system}\n\n{retry_prompt}", timeout=90
         )
+        providers = ", ".join(
+            dict.fromkeys(item for item in (usage.provider, retry_usage.provider) if item)
+        )
+        models = ", ".join(
+            dict.fromkeys(item for item in (usage.model, retry_usage.model) if item)
+        )
         return retry, Usage(
             input_tokens=usage.input_tokens + retry_usage.input_tokens,
             output_tokens=usage.output_tokens + retry_usage.output_tokens,
             searches=usage.searches + retry_usage.searches,
             reported=usage.reported and retry_usage.reported,
+            provider=providers or None,
+            model=models or None,
         )

@@ -16,16 +16,24 @@ VERA transforme un texte ou un lien en dossier de vérification : affirmations e
 | Domaine | Technologies |
 |---|---|
 | Frontend | Expo, Expo Router, React Native Web, TypeScript |
-| Backend | FastAPI, Python 3.12, Pydantic v2 |
-| Base de données prévue | PostgreSQL 16, SQLAlchemy 2, Alembic |
-| IA | Meta Model API (`muse-spark-1.3`), providers Meta et Fake |
+| Backend | FastAPI, Python 3.12, Pydantic v2, SQLAlchemy 2, Alembic |
+| Base de données | PostgreSQL 16, SQLite pour les tests locaux |
+| IA | Meta Model API (`muse-spark-1.3`), `MetaProvider`, `FakeProvider`, `FallbackProvider` |
 | Infrastructure | Docker Compose, Nginx |
 
-> PostgreSQL, l'authentification et les routes métier sont prévus dans l'architecture, mais ne sont pas encore intégrés au squelette actuel.
+## État de validation backend (3 novembre 2026)
 
-## État du projet
+Le backend a été exécuté dans Docker avec PostgreSQL et Nginx en mode `FakeProvider`.
 
-Le dépôt contient le squelette de la chaîne d'agents, une page Expo Web et les fichiers Docker. L'API expose uniquement `/api/v1/health`. L'authentification, les modèles et migrations, les routes métier, le flux SSE et les parcours complets restent à développer. Le projet n'est pas prêt pour la production.
+- Routes health et docs via Nginx : HTTP 200.
+- Migration PostgreSQL `0001_initial`, tables applicatives et persistance après redémarrage vérifiées.
+- Tests backend : **35 passés**.
+- Newman : **28 requêtes, 124 assertions, 0 échec** au dernier passage.
+- Évaluation FakeProvider des 24 cas : **20/24** d'accord strict. Les contrôles structurels des citations et la cohérence des verdicts sont 24/24 ; les données simulées ne prouvent pas l'exactitude factuelle.
+
+Les appels Meta réels ne sont pas encore validés. Avant de conclure sur B-05, B-13, B-14 ou B-16, exécuter les essais réels avec des clés autorisées. Le Web Expo reste une page d'accueil, sans les parcours UI Beta.
+
+Le statut détaillé B-01 à B-16 et les commandes de validation sont dans [`docs/BACKEND.md`](docs/BACKEND.md).
 
 ## Structure
 
@@ -37,6 +45,7 @@ vera/
 ├─ docs/
 │  ├─ AGENTS.md            # Agents IA et intégration Meta
 │  ├─ BACKEND.md           # Spécifications Backend
+│  ├─ DEMO_RUNBOOK.md      # Démonstration du backend
 │  └─ FRONTEND.md          # Spécifications Frontend
 ├─ infra/nginx/            # Configuration Nginx
 ├─ docker-compose.yml
@@ -46,14 +55,15 @@ vera/
 
 ## Démarrer avec Docker
 
-Prérequis : Docker et Docker Compose.
+Prérequis : Docker Desktop démarré et Docker Compose. Après avoir copié `.env.example`, configurez un mot de passe PostgreSQL local robuste et utilisez le même dans `DATABASE_URL`.
 
 ```powershell
-git clone <url-du-depot> vera
+git clone https://github.com/chel42/Meta_Hackathon.git vera
 Set-Location vera
 Copy-Item .env.example .env
-# Remplacez change-me-local dans POSTGRES_PASSWORD et DATABASE_URL
-docker compose up --build
+docker compose config
+docker compose up --build -d
+docker compose ps
 ```
 
 | Service | Adresse |
@@ -82,7 +92,7 @@ npm install
 npm run web
 ```
 
-## Tests
+## Tests backend et Postman
 
 Depuis `apps\api` :
 
@@ -91,6 +101,23 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
+Dernière exécution locale : **35 passed**. Depuis la racine du dépôt, après démarrage de Docker :
+
+```powershell
+npx newman run docs/postman/vera.postman_collection.json --reporters cli
+```
+
+Dernière exécution Newman : **28 requêtes, 124 assertions, 0 échec**.
+
+Évaluation reproductible en mode simulé, depuis `apps\api` :
+
+```powershell
+$env:MOCK_PROVIDER = "1"
+python scripts\evaluate.py
+```
+
+Le dernier résultat FakeProvider est 20/24 d'accord strict. Il valide le pipeline simulé, pas la véracité des résultats Meta.
+
 ## Intégration continue
 
 GitHub Actions teste l'API et le Web et construit les images Docker sur les pull requests et les pushes vers `main`. Pour une PR interne vers `main`, les trois jobs activent automatiquement la fusion squash : GitHub fusionne dès que les contrôles requis sont verts et que les autres règles de branche sont satisfaites. Les PR provenant d'un fork ne sont pas fusionnées automatiquement. Les pushes directs, force-push et suppressions de `main` restent bloqués. Après une fusion sur `main`, le workflow publie le Web sur Netlify et déclenche le déploiement de l'API sur Render.
@@ -98,10 +125,10 @@ GitHub Actions teste l'API et le Web et construit les images Docker sur les pull
 Pour préparer le déploiement :
 
 1. Importez le Web dans Netlify avec le dépôt ; les paramètres de build sont dans `netlify.toml`. Désactivez les déploiements automatiques Netlify : GitHub Actions publie après les contrôles CI.
-2. Créez le service Render depuis `render.yaml`. Pour les appels Meta, ajoutez `MODEL_API_KEY` et passez `MOCK_PROVIDER` à `0`. Configurez `DATABASE_URL` avec Supabase ; le backend n'utilise pas encore PostgreSQL, et les migrations/persistance restent à développer.
+2. Créez le service Render depuis `render.yaml`. Configurez `MODEL_API_KEY` et `MOCK_PROVIDER=0` pour les appels Meta, ainsi qu'une base PostgreSQL accessible par `DATABASE_URL`.
 3. Créez l'environnement GitHub `production` et ajoutez les secrets `NETLIFY_AUTH_TOKEN`, `NETLIFY_SITE_ID` et `RENDER_DEPLOY_HOOK`. Définissez la variable `EXPO_PUBLIC_API_BASE` avec l'URL de l'API Render, terminée par `/api/v1`.
 
-Les étapes de déploiement sont ignorées avec un avertissement tant que leurs secrets ne sont pas définis. Supabase est prévu comme base de données ; aucune connexion applicative ou migration n'est encore implémentée.
+Les étapes de déploiement sont ignorées avec un avertissement tant que leurs secrets ne sont pas définis.
 
 Après avoir configuré le remote et poussé `main`, exécutez depuis la racine :
 
@@ -115,8 +142,11 @@ Test Meta réel optionnel (consomme des appels API), depuis `apps\api` :
 
 ```powershell
 $env:MODEL_API_KEY = "..."
+$env:MOCK_PROVIDER = "0"
 python scripts\meta_smoke.py
 ```
+
+Le script écrit un rapport dans `eval\results\meta-smoke.json` et renvoie un code non nul si ses critères obligatoires échouent. Les runs à trois affirmations, l'analyse d'image et la confirmation de politique régionale sont des contrôles optionnels explicites ; ils peuvent consommer des appels supplémentaires.
 
 ## Documentation
 

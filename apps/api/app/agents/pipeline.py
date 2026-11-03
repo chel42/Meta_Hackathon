@@ -1,16 +1,20 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 import logging
 from uuid import uuid4
 
 from app.agents.claim_extractor import ClaimExtractor
 from app.agents.investigator import Investigator
+from app.agents.media_analyst import MediaAnalyst
 from app.agents.report_builder import ReportBuilder
 from app.agents.source_verifier import SourceVerifier
 from app.agents.verdict_judge import VerdictJudge
 from app.providers.base import LLMProvider, Usage
-from app.schemas.agents import ClaimVerdict, SourceCheck
+from app.schemas.agents import ClaimVerdict, MediaAnalysis, SourceCheck
 from app.schemas.proof import ProofReport
+
+EmitFn = Callable[[str, dict], Awaitable[None]]
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,7 @@ class AgentPipeline:
         self.investigator = Investigator(provider)
         self.verifier = SourceVerifier()
         self.judge = VerdictJudge(provider)
+        self.media = MediaAnalyst(provider)
         self.builder = ReportBuilder()
         self.semaphore = asyncio.Semaphore(max_parallel_searches)
         self.budget_usd = budget_usd
@@ -58,20 +63,30 @@ class AgentPipeline:
         run_id: str | None = None,
         content_type: str = "text",
         language: str = "fr",
+        image_data_url: str | None = None,
+        emit: EmitFn | None = None,
     ) -> PipelineResult:
         if len(content) > 8000:
             raise ValueError("Submission exceeds the 8,000 character limit")
         run_id = run_id or str(uuid4())
         total = Usage()
         extraction_failed = False
+
+        async def notify(event_type: str, payload: dict | None = None) -> None:
+            if emit:
+                await emit(event_type, payload or {})
+
+        await notify("step.started", {"step": "claim_extraction"})
         try:
             extraction, usage = await self.extractor.extract(content, language)
             total = _add_usage(total, usage)
             claims = extraction.claims
         except ValueError as exc:
-            logger.warning("Claim extraction response rejected: %s", exc)
+            logger.warning("Claim extraction response rejected")
             extraction_failed = True
             claims = []
+        await notify("claims.extracted", {"count": len(claims)})
+        await notify("step.completed", {"step": "claim_extraction"})
         verdicts: list[ClaimVerdict] = []
         all_sources: list[SourceCheck] = []
         partial = False
@@ -99,6 +114,11 @@ class AgentPipeline:
             checked = self.verifier.verify(
                 investigation, source_id_prefix=f"c{claim_index}-"
             )
+            for source in checked:
+                await notify(
+                    "source.found",
+                    {"source_id": source.source_id, "status": source.status, "url": str(source.url)},
+                )
             if investigation.search_calls == 0 or not checked:
                 return (
                     ClaimVerdict(
@@ -118,7 +138,8 @@ class AgentPipeline:
             try:
                 judged, judge_usage = await self.judge.judge(claim_text, checked, language)
             except ValueError as exc:
-                logger.warning("Structured verdict rejected: %s", exc)
+                logger.warning("Structured verdict rejected")
+                del exc
                 return (
                     ClaimVerdict(
                         verdict="unverifiable",
@@ -151,6 +172,7 @@ class AgentPipeline:
                 Usage(),
             )
 
+        await notify("step.started", {"step": "investigation"})
         results = await asyncio.gather(
             *[
                 run_claim(claim.text, index) if claim.checkable else skip_claim()
@@ -169,7 +191,30 @@ class AgentPipeline:
             total = _add_usage(total, claim_usage)
             verdicts.append(verdict)
             all_sources.extend(sources)
+            await notify(
+                "claim.verdict",
+                {"claim_index": len(verdicts), "verdict": verdict.verdict},
+            )
+        await notify("step.completed", {"step": "investigation"})
+        await notify("step.started", {"step": "source_verification"})
+        await notify("step.completed", {"step": "source_verification"})
+        media: MediaAnalysis | None = None
+        if image_data_url:
+            await notify("step.started", {"step": "media_analysis"})
+            try:
+                media, media_usage = await self.media.analyze(image_data_url, content, language)
+                total = _add_usage(total, media_usage)
+            except Exception:
+                logger.warning("Image analysis skipped")
+                media = MediaAnalysis(
+                    observations=[],
+                    caption_consistency="unclear",
+                    provenance="not_assessed",
+                )
+            await notify("step.completed", {"step": "media_analysis"})
         partial = any("budget maximal atteint" in verdict.limits for verdict in verdicts)
+        await notify("budget.update", {"budget_used": self._cost(total)})
+        await notify("step.started", {"step": "report_generation"})
 
         report = self.builder.build(
             run_id=run_id,
@@ -179,22 +224,32 @@ class AgentPipeline:
             claims=claims,
             verdicts=verdicts,
             sources=all_sources,
-            provider=self.provider.name,
-            model=self.provider.model,
+            provider=total.provider or self.provider.name,
+            model=total.model or self.provider.model,
             search_calls=total.searches,
             budget_used=self._cost(total),
+            input_tokens=total.input_tokens,
+            output_tokens=total.output_tokens,
             partial=partial,
             extraction_failed=extraction_failed,
+            media_analysis=media,
         )
+        await notify("step.completed", {"step": "report_generation"})
         return PipelineResult(report=report, usage=total)
 
 
 def _add_usage(first: Usage, second: Usage) -> Usage:
+    providers = ", ".join(
+        dict.fromkeys(item for item in (first.provider, second.provider) if item)
+    )
+    models = ", ".join(dict.fromkeys(item for item in (first.model, second.model) if item))
     return Usage(
         input_tokens=first.input_tokens + second.input_tokens,
         output_tokens=first.output_tokens + second.output_tokens,
         searches=first.searches + second.searches,
         reported=first.reported and second.reported,
+        provider=providers or None,
+        model=models or None,
     )
 
 

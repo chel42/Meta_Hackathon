@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.schemas.agents import Claim, ClaimVerdict, SourceCheck
+from app.schemas.agents import Claim, ClaimVerdict, MediaAnalysis, SourceCheck
 from app.schemas.proof import (
     Advice,
     ProofClaim,
@@ -33,8 +33,11 @@ class ReportBuilder:
         model: str,
         search_calls: int,
         budget_used: float,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
         partial: bool = False,
         extraction_failed: bool = False,
+        media_analysis: MediaAnalysis | None = None,
     ) -> ProofReport:
         source_map = {source.source_id: source for source in sources}
         proof_claims = [
@@ -80,6 +83,7 @@ class ReportBuilder:
             input={"type": content_type, "language": language, "excerpt": content[:500]},
             claims=proof_claims,
             sources=proof_sources,
+            media_analysis=media_analysis,
             limits=limits,
             advice=Advice(
                 level="avoid_sharing" if contradicted else "verify_source",
@@ -94,5 +98,7 @@ class ReportBuilder:
                 model=model,
                 search_calls=search_calls,
                 budget_used=budget_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             ),
         )
