@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: vera-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: ./apps/api
+    autoDeploy: false
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: MOCK_PROVIDER
+        value: "1"
+      - key: META_BASE_URL
+        value: https://api.meta.ai/v1
+      - key: META_MODEL
+        value: muse-spark-1.3
+      - key: MODEL_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false

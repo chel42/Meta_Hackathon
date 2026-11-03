@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "VERA",
+    "slug": "vera",
+    "scheme": "vera",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router"]
+  }
+}
