@@ -18,6 +18,7 @@ def _usage(response: Any, *, responses_api: bool = False) -> Usage:
     return Usage(
         input_tokens=getattr(usage, input_name, 0) or 0,
         output_tokens=getattr(usage, output_name, 0) or 0,
+        reported=usage is not None,
     )
 
 
@@ -158,6 +159,7 @@ class MetaProvider:
             input_tokens=response_usage.input_tokens,
             output_tokens=response_usage.output_tokens,
             searches=len(search_calls),
+            reported=response_usage.reported,
         )
 
     async def describe_image(
