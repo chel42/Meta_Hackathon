@@ -115,6 +115,10 @@ Chaque appel enregistre sa consommation (`usage`) : `budget_used` = jetons × ta
 | Latence et coût d'un run à 3 affirmations | p50 et p95 relevés ; réglage du plafond de budget |
 | Politique géographique de l'API | Vérifiée pour chaque membre de l'équipe |
 
+Depuis `apps/api`, lancer `python scripts/meta_smoke.py`. Définir les tarifs dans `TOKEN_INPUT_USD_PER_MILLION`, `TOKEN_OUTPUT_USD_PER_MILLION` et `SEARCH_USD` pour obtenir les coûts. `--three-claim-runs 5` mesure cinq runs complets ciblant trois affirmations (appels Meta potentiellement payants) ; `--image <fichier> --caption "..."` active le test image facultatif. La politique géographique est une vérification d'équipe à consigner avec `--region-policy`, et ne peut pas être validée automatiquement par le script. Le rapport est écrit dans `eval/results/meta-smoke.json`.
+
+Le mode `--three-claim-runs` exige les trois tarifs afin que le plafond `RUN_BUDGET_USD` (0,50 USD par défaut) puisse réellement interrompre les recherches ; sans tarifs, le script s'arrête avant tout appel Meta.
+
 ## 8. Tâches
 
 | ID | Tâche | Prio | Est. | Ticket parent | Critère d'acceptation |

@@ -194,6 +194,7 @@ def _add_usage(first: Usage, second: Usage) -> Usage:
         input_tokens=first.input_tokens + second.input_tokens,
         output_tokens=first.output_tokens + second.output_tokens,
         searches=first.searches + second.searches,
+        reported=first.reported and second.reported,
     )
 
 

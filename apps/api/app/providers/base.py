@@ -13,6 +13,7 @@ class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
     searches: int = 0
+    reported: bool = True
 
 
 class LLMProvider(Protocol):
