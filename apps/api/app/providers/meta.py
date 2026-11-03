@@ -22,6 +22,15 @@ def _usage(response: Any, *, responses_api: bool = False) -> Usage:
     )
 
 
+def _add_usage(first: Usage, second: Usage) -> Usage:
+    return Usage(
+        input_tokens=first.input_tokens + second.input_tokens,
+        output_tokens=first.output_tokens + second.output_tokens,
+        searches=first.searches + second.searches,
+        reported=first.reported and second.reported,
+    )
+
+
 class MetaProvider:
     name = "meta"
 
@@ -66,6 +75,7 @@ class MetaProvider:
     ) -> tuple[T, Usage]:
         schema = output_model.model_json_schema()
         last_error = "No structured response returned"
+        total_usage = Usage()
         for attempt in range(2):
             prompt = user_prompt if attempt == 0 else (
                 f"{user_prompt}\n\nLa réponse précédente était invalide : {last_error}. "
@@ -99,13 +109,24 @@ class MetaProvider:
                     or "strict" not in message and "json_schema" not in message
                 ):
                     raise
-                request["response_format"]["json_schema"]["strict"] = False
-                response = await self._chat(**request)
+                fallback_request = {
+                    **request,
+                    "response_format": {
+                        **request["response_format"],
+                        "json_schema": {
+                            **request["response_format"]["json_schema"],
+                            "strict": False,
+                        },
+                    },
+                }
+                response = await self._chat(**fallback_request)
             raw = response.choices[0].message.content
+            response_usage = _usage(response)
+            total_usage = _add_usage(total_usage, response_usage)
             try:
                 if raw is None:
                     raise ValueError("Empty structured response")
-                return output_model.model_validate_json(raw), _usage(response)
+                return output_model.model_validate_json(raw), total_usage
             except (ValidationError, ValueError) as exc:
                 last_error = str(exc)
         raise ValueError(f"Meta returned invalid {schema_name} JSON: {last_error}")
