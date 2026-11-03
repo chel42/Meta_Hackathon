@@ -30,4 +30,5 @@ class Investigator:
             input_tokens=usage.input_tokens + retry_usage.input_tokens,
             output_tokens=usage.output_tokens + retry_usage.output_tokens,
             searches=usage.searches + retry_usage.searches,
+            reported=usage.reported and retry_usage.reported,
         )
