@@ -245,6 +245,7 @@ async def test_meta_responses_api_parses_search_results_and_citations() -> None:
     assert request["tools"] == [
         {"type": "web_search", "search_context_size": "medium"}
     ]
+    assert request["max_tool_calls"] == 2
     assert request["include"] == ["web_search_call.results"]
     assert request["max_output_tokens"] == 4000
 

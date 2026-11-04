@@ -393,9 +393,9 @@ async def _run(args: argparse.Namespace) -> tuple[dict[str, Any], bool]:
                     result = await AgentPipeline(
                         provider,
                         budget_usd=run_budget,
-                        token_input_usd_per_million=rates["input"] or 0,
-                        token_output_usd_per_million=rates["output"] or 0,
-                        search_usd=rates["search"] or 0,
+                        token_input_usd_per_million=rates["input"],
+                        token_output_usd_per_million=rates["output"],
+                        search_usd=rates["search"],
                     ).run(THREE_CLAIM_SAMPLE)
                     elapsed = time.perf_counter() - started
                     run_latencies.append(elapsed)

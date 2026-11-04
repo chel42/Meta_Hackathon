@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.schemas.agents import Claim, ClaimVerdict, SourceCheck
+from app.schemas.agents import Claim, ClaimVerdict, MediaAnalysis, SourceCheck
 from app.schemas.proof import (
     Advice,
     ProofClaim,
@@ -32,9 +32,14 @@ class ReportBuilder:
         provider: str,
         model: str,
         search_calls: int,
-        budget_used: float,
+        budget_used: float | None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
         partial: bool = False,
+        budget_unmeasurable: bool = False,
+        additional_limits: list[str] | None = None,
         extraction_failed: bool = False,
+        media_analysis: MediaAnalysis | None = None,
     ) -> ProofReport:
         source_map = {source.source_id: source for source in sources}
         proof_claims = [
@@ -71,6 +76,9 @@ class ReportBuilder:
             limits.append("extraction des affirmations non validée")
         if partial:
             limits.append("rapport partiel : budget maximal atteint")
+        if budget_unmeasurable:
+            limits.append("consommation fournisseur non mesurable")
+        limits.extend(additional_limits or [])
         if any(source.status != "confirmed" for source in sources):
             limits.append("certaines sources citées n'ont pas été confirmées dans les résultats bruts")
         contradicted = any(claim.verdict == "contradicted" for claim in proof_claims)
@@ -80,6 +88,7 @@ class ReportBuilder:
             input={"type": content_type, "language": language, "excerpt": content[:500]},
             claims=proof_claims,
             sources=proof_sources,
+            media_analysis=media_analysis,
             limits=limits,
             advice=Advice(
                 level="avoid_sharing" if contradicted else "verify_source",
@@ -94,5 +103,7 @@ class ReportBuilder:
                 model=model,
                 search_calls=search_calls,
                 budget_used=budget_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             ),
         )

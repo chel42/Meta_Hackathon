@@ -59,15 +59,17 @@ Migrations Alembic. Toute requête sur `runs`, `reports`, `submissions` filtre p
 | `GET /reports/{id}` | Preuve VERA (JSON) |
 | `GET /health` | Santé, sans information sensible |
 
-**Énumérations** : `status` = `queued`, `running`, `completed`, `failed` · `current_step` = `intake`, `claim_extraction`, `investigation`, `source_verification`, `media_analysis`, `report_generation` · verdict = `supported`, `contradicted`, `unverifiable` · contrôle de source = `confirmed`, `not_confirmed`, `unreachable`.
+**Énumérations** : `status` = `queued`, `running`, `completed`, `failed` · `current_step` = `intake`, `url_research`, `claim_extraction`, `investigation`, `source_verification`, `media_analysis`, `report_generation` · verdict = `supported`, `contradicted`, `unverifiable` · contrôle de source = `confirmed`, `not_confirmed`, `unreachable`.
 
 **Erreurs** : `{ "error": { "code", "message", "request_id" } }` avec 401 `unauthenticated`, 403 `forbidden`, 404 `not_found`, 409 `email_taken`, 413 `payload_too_large`, 422 `invalid_input`, 429 `rate_limited`, 503 `provider_unavailable`.
 
 ## 6. Exécution d'un run
 
-Pipeline : **intake** → **extraction** (3 affirmations atomiques au plus ; les opinions sont `unverifiable` sans recherche) → **recherche** (une requête par affirmation, en parallèle) → **contrôle des sources** → **rapport**.
+Pipeline : pour un texte, **intake** → **extraction** (3 affirmations atomiques au plus) → **recherche** (une requête par affirmation, 3 simultanées au plus) → **contrôle des sources** → **rapport**. Pour une URL, la recherche web consulte d'abord la page et fournit le contenu à l'extraction ; l'URL n'est jamais téléchargée directement par l'API.
 
 **Contrôle des sources (V0)** : une source citée n'est `confirmed` que si son URL figure dans les résultats bruts de la recherche. **Verdict** : aucune source confirmée → `unverifiable` ; `contradicted` seulement si une source confirmée contredit.
+
+Le plafond est réservé avant chaque appel, y compris les appels en parallèle, à partir des tarifs configurés et des limites de jetons/recherche. En mode Meta (`MOCK_PROVIDER=0`), les trois variables `TOKEN_INPUT_USD_PER_MILLION`, `TOKEN_OUTPUT_USD_PER_MILLION` et `SEARCH_USD` sont obligatoires et au moins un tarif doit être strictement positif. Si le fournisseur ne retourne pas sa consommation, aucune nouvelle requête payante n'est lancée et `trace.budget_used` reste `null` plutôt que d'afficher un coût nul.
 
 Événements SSE (`id` = `seq` du run) : `run.started`, `step.started`, `step.completed`, `claims.extracted`, `source.found`, `claim.verdict`, `budget.update`, `report.ready` (`report_id`), `run.failed` (`code`, `retryable`). Le flux se ferme après `report.ready` ou `run.failed`.
 
@@ -85,7 +87,8 @@ Pipeline : **intake** → **extraction** (3 affirmations atomiques au plus ; les
   "media_analysis": null,
   "limits": ["…"],
   "advice": { "level": "verify_source", "text": "…" },
-  "trace": { "provider": "meta", "model": "muse-spark-1.3", "search_calls": 3, "budget_used": 0.12 }
+  "trace": { "provider": "meta", "model": "muse-spark-1.3", "search_calls": 3, "budget_used": 0.12,
+    "input_tokens": 4200, "output_tokens": 850 }
 }
 ```
 
@@ -99,7 +102,7 @@ Interface unique : `generate_json`, `generate_text`, `grounded_search` (réponse
 
 Points de la documentation Meta à respecter :
 - URL `https://api.meta.ai/v1`, SDK OpenAI compatible, modèle `muse-spark-1.3` en **mode Standard** (jamais `-contributor` pour du contenu utilisateur).
-- Recherche : outil `web_search` sur `/v1/responses` uniquement, avec `include: ["web_search_call.results"]` ; citations en annotations `url_citation`.
+- Recherche : outil `web_search` sur `/v1/responses` uniquement, `max_tool_calls=2` et `include: ["web_search_call.results"]` ; les tests A-01 doivent confirmer l'acceptation de ce plafond par Meta. Citations en annotations `url_citation`.
 - Le modèle décide de chercher : vérifier la présence d'un appel de recherche, relancer une fois, sinon `unverifiable`.
 - Une affirmation par requête (la recherche multi-étapes est moins fiable) ; `max_output_tokens` d'au moins 4 000.
 - Sorties JSON : Chat Completions avec `response_format` `json_schema` ; recherche : Responses API. Les deux surfaces ne sont jamais mélangées.
@@ -107,7 +110,7 @@ Points de la documentation Meta à respecter :
 
 ## 9. Garde-fous
 
-Entrée ≤ 8 000 caractères ; 3 affirmations ; 2 recherches par affirmation ; 3 runs simultanés ; run limité à 180 s et 0,50 USD ; 20 soumissions par heure et par utilisateur ; image ≤ 5 Mo. Le backend **ne télécharge aucune URL** (elle est transmise à la recherche). Le contenu soumis et les pages web sont traités comme données non fiables ; toute sortie est validée par schéma ; les agents n'ont aucun outil à effet de bord. Conservation 7 jours ; journaux sans contenu intégral ; aucun secret dans le dépôt.
+Entrée ≤ 8 000 caractères ; 3 affirmations ; 2 recherches par affirmation ; 3 runs simultanés ; run limité à 180 s et 0,50 USD ; 20 soumissions par heure et par utilisateur ; image ≤ 5 Mo (Nginx accepte jusqu'à 6 Mo pour la surcharge multipart). Le backend **ne télécharge aucune URL** (elle est transmise à la recherche). Le contenu soumis et les pages web sont traités comme données non fiables ; toute sortie est validée par schéma ; les agents n'ont aucun outil à effet de bord. Conservation 7 jours, purge au démarrage puis toutes les heures ; journaux sans contenu intégral ; aucun secret dans le dépôt.
 
 ## 10. Tâches Backend
 
@@ -135,3 +138,34 @@ Total P0 : environ 35 h. **Chemin critique** : B-05 → B-06 → B-08 → B-11.
 ## 11. Définition de terminé (Beta)
 
 Un utilisateur crée un compte, soumet un texte, suit l'enquête en direct, ouvre une Preuve dont chaque source est consultable et contrôlée, puis la retrouve dans son historique. Un autre utilisateur ne peut pas y accéder. La démo de secours fonctionne sans clé Meta.
+
+## 12. État de validation backend (3 novembre 2026)
+
+Les contrôles suivants ont été exécutés sur la stack Docker avec PostgreSQL et Nginx :
+
+- `docker compose config -q` : réussi ; les services `api` et `db` sont healthy et `web` est démarré.
+- `GET /api/v1/health` et `GET /api/docs` via Nginx : HTTP 200.
+- PostgreSQL : révision Alembic `0001_initial` et tables applicatives présentes. Une sonde temporaire a survécu à un redémarrage du conteneur DB ; la table-sonde a ensuite été supprimée.
+- Tests backend : `47 passed` après intégration des tests de contrat Meta déjà fusionnés. Newman : `27` requêtes, `120` assertions, `0` échec sur le passage final après réconciliation avec `main`.
+- L'évaluation des 24 cas avec `MOCK_PROVIDER=1` donne 20/24 d'accord strict, 24/24 contrôles structurels de citations et 24/24 de cohérence des verdicts. Ces résultats vérifient le pipeline avec des données synthétiques, pas la véracité factuelle.
+
+| Ticket | État observé | À compléter |
+|---|---|---|
+| B-01 | Validé : services Docker démarrés et routes health/docs accessibles. | — |
+| B-02 | Validé : migration Alembic et tables vérifiées dans PostgreSQL ; persistance vérifiée après redémarrage. | — |
+| B-03 | Validé par tests et parcours Newman : inscription, connexion, cookie et déconnexion. | — |
+| B-04 | Validé par tests : contrôle d'accès, isolation et erreurs d'authentification. | — |
+| B-05 | Fournisseurs et contrats implémentés ; tests simulés réussis. | Exécuter les tests de fumée Meta A-01/A-02 avec une clé autorisée et consigner schéma JSON, recherche, citations, coûts et latences. |
+| B-06 | Pipeline et preuve testés avec FakeProvider, dont les cas de contrat. | Confirmer les comportements avec des réponses Meta réelles. |
+| B-07 | Validé par tests : run interrompu, gestion d'exécution et rejeu d'événements. | — |
+| B-08 | Validé par tests et Newman : soumission, run, statut et rapport. | — |
+| B-09 | Validé par tests et Newman : SSE, rejeu `Last-Event-ID` et accès via Nginx. | — |
+| B-10 | Validé : suite backend complète, 47 tests réussis après intégration des tests de contrat Meta déjà fusionnés. | — |
+| B-11 | Runbook de démonstration disponible en mode mock. | Rejouer la démonstration sur l'environnement de présentation cible. |
+| B-12 | Validé par tests et Newman : profil, changement de mot de passe, suppression du compte et révocation des sessions. | — |
+| B-13 | Upload et validations d'image testés ; la provenance reste `not_assessed`. | Vérifier l'analyse et la cohérence image/légende avec le fournisseur réel ; ne pas tirer de conclusion de falsification. |
+| B-14 | Jeu de 24 cas, script et rapport reproductible présents ; FakeProvider : 20/24 d'accord strict. | Examiner les 4 divergences et refaire l'évaluation avec Meta ; les métriques synthétiques ne démontrent pas l'exactitude factuelle. |
+| B-15 | Validé par tests : suppression isolée, nettoyage des données liées et purge après sept jours. | — |
+| B-16 | Validé par tests simulés : fallback après 429/5xx et propagation des erreurs permanentes. | Vérifier l'intégration et l'usage comptabilisé avec les fournisseurs réels configurés. |
+
+Les tickets nécessitant un appel externe ne sont pas déclarés validés sur la seule base de FakeProvider. Aucun secret d'API ne doit être ajouté au dépôt ; configurer les clés dans l'environnement local avant les essais Meta.

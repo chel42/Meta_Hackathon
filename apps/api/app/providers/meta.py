@@ -11,7 +11,13 @@ from app.schemas.agents import Citation, Investigation, RawResult
 T = TypeVar("T", bound=BaseModel)
 
 
-def _usage(response: Any, *, responses_api: bool = False) -> Usage:
+def _usage(
+    response: Any,
+    *,
+    provider: str | None = None,
+    model: str | None = None,
+    responses_api: bool = False,
+) -> Usage:
     usage = getattr(response, "usage", None)
     input_name = "input_tokens" if responses_api else "prompt_tokens"
     output_name = "output_tokens" if responses_api else "completion_tokens"
@@ -19,15 +25,25 @@ def _usage(response: Any, *, responses_api: bool = False) -> Usage:
         input_tokens=getattr(usage, input_name, 0) or 0,
         output_tokens=getattr(usage, output_name, 0) or 0,
         reported=usage is not None,
+        provider=provider,
+        model=model,
     )
 
 
 def _add_usage(first: Usage, second: Usage) -> Usage:
+    providers = ", ".join(
+        dict.fromkeys(item for item in (first.provider, second.provider) if item)
+    )
+    models = ", ".join(
+        dict.fromkeys(item for item in (first.model, second.model) if item)
+    )
     return Usage(
         input_tokens=first.input_tokens + second.input_tokens,
         output_tokens=first.output_tokens + second.output_tokens,
         searches=first.searches + second.searches,
         reported=first.reported and second.reported,
+        provider=providers or None,
+        model=models or None,
     )
 
 
@@ -121,7 +137,9 @@ class MetaProvider:
                 }
                 response = await self._chat(**fallback_request)
             raw = response.choices[0].message.content
-            response_usage = _usage(response)
+            response_usage = _usage(
+                response, provider=self.name, model=self.model
+            )
             total_usage = _add_usage(total_usage, response_usage)
             try:
                 if raw is None:
@@ -139,6 +157,7 @@ class MetaProvider:
             input=prompt,
             max_output_tokens=4000,
             tools=[{"type": "web_search", "search_context_size": "medium"}],
+            max_tool_calls=2,
             include=["web_search_call.results"],
             timeout=timeout,
         )
@@ -175,12 +194,19 @@ class MetaProvider:
             raw_results=raw_results,
             search_calls=len(search_calls),
         )
-        response_usage = _usage(response, responses_api=True)
+        response_usage = _usage(
+            response,
+            provider=self.name,
+            model=self.model,
+            responses_api=True,
+        )
         return investigation, Usage(
             input_tokens=response_usage.input_tokens,
             output_tokens=response_usage.output_tokens,
             searches=len(search_calls),
             reported=response_usage.reported,
+            provider=self.name,
+            model=self.model,
         )
 
     async def describe_image(
@@ -222,4 +248,6 @@ class MetaProvider:
         raw = response.choices[0].message.content
         if raw is None:
             raise ValueError("Meta returned an empty image analysis")
-        return MediaAnalysis.model_validate_json(raw), _usage(response)
+        return MediaAnalysis.model_validate_json(raw), _usage(
+            response, provider=self.name, model=self.model
+        )

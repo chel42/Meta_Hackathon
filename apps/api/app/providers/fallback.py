@@ -10,23 +10,38 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class FallbackProvider:
-    name = "meta-with-fallback"
-
     def __init__(self, primary: LLMProvider, fallback: LLMProvider) -> None:
         self.primary = primary
         self.fallback = fallback
-        self.model = primary.model
+
+    @property
+    def name(self) -> str:
+        return f"{self.primary.name}+{self.fallback.name}"
+
+    @property
+    def model(self) -> str:
+        return f"{self.primary.model}+{self.fallback.model}"
 
     async def _invoke(self, method_name: str, **kwargs):
+        provider = self.primary
         try:
-            return await getattr(self.primary, method_name)(**kwargs)
+            result = await getattr(provider, method_name)(**kwargs)
         except APIStatusError as exc:
             if exc.status_code != 429 and exc.status_code < 500:
                 raise
-            result = await getattr(self.fallback, method_name)(**kwargs)
-            self.name = f"{self.primary.name}+{self.fallback.name}"
-            self.model = self.fallback.model
-            return result
+            provider = self.fallback
+            result = await getattr(provider, method_name)(**kwargs)
+        value, usage = result
+        if usage.provider is None or usage.model is None:
+            usage = Usage(
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                searches=usage.searches,
+                reported=usage.reported,
+                provider=usage.provider or provider.name,
+                model=usage.model or provider.model,
+            )
+        return value, usage
 
     async def generate_json(
         self,

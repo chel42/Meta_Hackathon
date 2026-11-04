@@ -11,11 +11,33 @@ class Investigator:
 
     async def investigate(self, claim: str, language: str = "fr") -> tuple[Investigation, Usage]:
         system = load_prompt("investigator")
-        prompt = (
-            f"Langue de réponse : {language}\nAffirmation : {claim}\n"
+        prompt = self._format_prompt(
+            language,
+            f"Affirmation : {claim}\n"
             "Cherche des sources fiables et datées sur cette affirmation, y compris "
-            "des sources qui la contredisent. Cite chaque source."
+            "des sources qui la contredisent. Cite chaque source.",
         )
+        return await self._search_with_retry(system, prompt)
+
+    async def investigate_url(self, url: str, language: str = "fr") -> tuple[Investigation, Usage]:
+        system = load_prompt("investigator")
+        prompt = self._format_prompt(
+            language,
+            f"URL à examiner : {url}\n"
+            "Utilise la recherche web pour consulter cette page et en extraire les "
+            "affirmations factuelles vérifiables. Résume les affirmations sans les "
+            "présenter comme établies, et cite les sources consultées. Si la page "
+            "n'est pas accessible par la recherche, indique-le explicitement.",
+        )
+        return await self._search_with_retry(system, prompt)
+
+    @staticmethod
+    def _format_prompt(language: str, task: str) -> str:
+        return f"Langue de réponse : {language}\n{task}"
+
+    async def _search_with_retry(
+        self, system: str, prompt: str
+    ) -> tuple[Investigation, Usage]:
         investigation, usage = await self.provider.grounded_search(
             prompt=f"{system}\n\n{prompt}", timeout=90
         )
@@ -26,9 +48,17 @@ class Investigator:
         retry, retry_usage = await self.provider.grounded_search(
             prompt=f"{system}\n\n{retry_prompt}", timeout=90
         )
+        providers = ", ".join(
+            dict.fromkeys(item for item in (usage.provider, retry_usage.provider) if item)
+        )
+        models = ", ".join(
+            dict.fromkeys(item for item in (usage.model, retry_usage.model) if item)
+        )
         return retry, Usage(
             input_tokens=usage.input_tokens + retry_usage.input_tokens,
             output_tokens=usage.output_tokens + retry_usage.output_tokens,
             searches=usage.searches + retry_usage.searches,
             reported=usage.reported and retry_usage.reported,
+            provider=providers or None,
+            model=models or None,
         )

@@ -1,0 +1,681 @@
+{
+  "info": {
+    "name": "VERA API",
+    "description": "Suite séquentielle de validation HTTP via Nginx. Utiliser une stack Docker démarrée et stable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const expected = {",
+          "  'Health': 200,",
+          "  'Register owner': 201,",
+          "  'Get current user': 200,",
+          "  'Get profile': 200,",
+          "  'Update profile': 200,",
+          "  'Submit verification': 202,",
+          "  'Get run': 200,",
+          "  'Stream run SSE': 200,",
+          "  'Reconnect SSE with Last-Event-ID': 200,",
+          "  'Get report': 200,",
+          "  'Forbidden Origin': 403,",
+          "  'Auth error - invalid login': 401,",
+          "  'Auth error - duplicate email': 409,",
+          "  'Register second user': 201,",
+          "  'Isolation - other user cannot access run': 404,",
+          "  'Login owner again': 200,",
+          "  'Delete run': 200,",
+          "  'Deleted run is inaccessible': 404,",
+          "  'Deleted report is inaccessible': 404,",
+          "  'Change password': 200,",
+          "  'Login after password change': 200,",
+          "  'Open second owner session': 200,",
+          "  'Delete account': 200,",
+          "  'Old registration session revoked': 401,",
+          "  'Previous session revoked': 401,",
+          "  'Latest session revoked': 401",
+          "};",
+          "pm.collectionVariables.set('expectedStatus', String(expected[pm.info.requestName]));"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const expectedStatus = Number(pm.collectionVariables.get('expectedStatus'));",
+          "const isSse = pm.info.requestName.includes('SSE');",
+          "const contentType = pm.response.headers.get('Content-Type') || '';",
+          "pm.test('Expected HTTP status ' + expectedStatus, function () {",
+          "  pm.expect(pm.response.code).to.eql(expectedStatus);",
+          "});",
+          "pm.test('No server or gateway failure', function () {",
+          "  pm.expect(pm.response.code).to.be.below(500);",
+          "});",
+          "if (isSse) {",
+          "  pm.test('SSE content type', function () {",
+          "    pm.expect(contentType).to.include('text/event-stream');",
+          "  });",
+          "} else {",
+          "  const isJson = contentType.toLowerCase().includes('application/json');",
+          "  pm.test('JSON content type', function () {",
+          "    pm.expect(isJson).to.eql(true);",
+          "  });",
+          "  if (isJson && pm.response.code < 500) {",
+          "    let body;",
+          "    try { body = pm.response.json(); } catch (error) {",
+          "      pm.test('Valid JSON response', function () { throw error; });",
+          "    }",
+          "    if (body !== undefined) {",
+          "      const expectedErrors = {",
+          "        'Forbidden Origin': 'forbidden',",
+          "        'Auth error - invalid login': 'unauthenticated',",
+          "        'Auth error - duplicate email': 'email_taken',",
+          "        'Isolation - other user cannot access run': 'not_found',",
+          "        'Deleted run is inaccessible': 'not_found',",
+          "        'Deleted report is inaccessible': 'not_found',",
+          "        'Old registration session revoked': 'unauthenticated',",
+          "        'Previous session revoked': 'unauthenticated',",
+          "        'Latest session revoked': 'unauthenticated'",
+          "      };",
+          "      const expectedError = expectedErrors[pm.info.requestName];",
+          "      if (expectedError) {",
+          "        pm.test('Expected API error ' + expectedError, function () {",
+          "          pm.expect(body.error.code).to.eql(expectedError);",
+          "        });",
+          "      } else if (expectedStatus < 400) {",
+          "        pm.test('Successful response has no error envelope', function () {",
+          "          pm.expect(body.error == null).to.eql(true);",
+          "        });",
+          "      }",
+          "    }",
+          "  }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api/v1" },
+    { "key": "email", "value": "" },
+    { "key": "emailB", "value": "" },
+    { "key": "password", "value": "password12" },
+    { "key": "newPassword", "value": "password99" },
+    { "key": "sessionARegistration", "value": "" },
+    { "key": "sessionAfterPasswordChange", "value": "" },
+    { "key": "sessionSecondAfterPasswordChange", "value": "" },
+    { "key": "sessionB", "value": "" },
+    { "key": "runId", "value": "" },
+    { "key": "reportId", "value": "" },
+    { "key": "resumeAfterId", "value": "0" },
+    { "key": "pollCount", "value": "0" },
+    { "key": "expectedStatus", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      }
+    },
+    {
+      "name": "Register owner",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('email', 'vera+' + Date.now() + '@example.com');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 201 && type.toLowerCase().includes('application/json')) {",
+              "  const body = pm.response.json();",
+              "  pm.test('Registration returns the requested email', function () { pm.expect(body.email).to.eql(pm.collectionVariables.get('email')); });",
+              "  pm.collectionVariables.set('email', body.email);",
+              "  const cookie = pm.cookies.get('vera_session');",
+              "  pm.test('Registration sets a session cookie', function () { pm.expect(cookie).to.be.a('string').and.not.empty; });",
+              "  if (cookie) pm.collectionVariables.set('sessionARegistration', cookie);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"display_name\": \"Demo User\",\n  \"language\": \"fr\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register"
+      }
+    },
+    {
+      "name": "Get current user",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  const body = pm.response.json();",
+              "  pm.test('Current user matches the owner account', function () {",
+              "    pm.expect(body.email).to.eql(pm.collectionVariables.get('email'));",
+              "    pm.expect(body.id).to.be.a('string').and.not.empty;",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "Get profile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  const body = pm.response.json();",
+              "  pm.test('Profile includes run statistics', function () {",
+              "    pm.expect(body.runs_total).to.be.a('number');",
+              "    pm.expect(body.verdicts).to.be.an('object');",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/me"
+      }
+    },
+    {
+      "name": "Update profile",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  pm.test('Profile update is persisted', function () { pm.expect(pm.response.json().display_name).to.eql('Demo Updated'); });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"display_name\": \"Demo Updated\",\n  \"language\": \"fr\"\n}"
+        },
+        "url": "{{baseUrl}}/me"
+      }
+    },
+    {
+      "name": "Submit verification",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 202 && type.toLowerCase().includes('application/json')) {",
+              "  const runId = pm.response.json().run_id;",
+              "  pm.test('Submission returns a run id', function () { pm.expect(runId).to.be.a('string').and.not.empty; });",
+              "  pm.collectionVariables.set('runId', runId);",
+              "  pm.collectionVariables.set('pollCount', '0');",
+              "  pm.execution.setNextRequest('Get run');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"text\",\n  \"content\": \"Paris est la capitale de la France.\",\n  \"language\": \"fr\"\n}"
+        },
+        "url": "{{baseUrl}}/submissions"
+      }
+    },
+    {
+      "name": "Get run",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  const body = pm.response.json();",
+              "  if (body.status === 'completed') {",
+              "    pm.collectionVariables.set('reportId', body.report_id);",
+              "    pm.test('Run completed and has a report', function () { pm.expect(body.report_id).to.be.a('string').and.not.empty; });",
+              "  } else if (body.status === 'failed') {",
+              "    pm.test('Run completed successfully', function () { pm.expect(body.status).to.eql('completed'); });",
+              "    pm.execution.setNextRequest(null);",
+              "  } else {",
+              "    const count = Number(pm.collectionVariables.get('pollCount') || '0') + 1;",
+              "    pm.collectionVariables.set('pollCount', String(count));",
+              "    if (count < 30) pm.execution.setNextRequest('Get run');",
+              "    else {",
+              "      pm.test('Run finishes before poll limit', function () { pm.expect(count).to.be.below(30); });",
+              "      pm.execution.setNextRequest(null);",
+              "    }",
+              "  }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/runs/{{runId}}"
+      }
+    },
+    {
+      "name": "Stream run SSE",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.text();",
+              "const ids = [...body.matchAll(/^id:\\s*(\\d+)\\s*$/gm)].map(match => Number(match[1]));",
+              "pm.test('SSE stream contains run events', function () {",
+              "  pm.expect(body).to.include('event: run.started');",
+              "  pm.expect(ids.length).to.be.above(0);",
+              "});",
+              "if (ids.length > 0) pm.collectionVariables.set('resumeAfterId', String(ids[0]));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "text/event-stream" },
+          { "key": "Last-Event-ID", "value": "0" }
+        ],
+        "url": "{{baseUrl}}/runs/{{runId}}/stream"
+      }
+    },
+    {
+      "name": "Reconnect SSE with Last-Event-ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.text();",
+              "const after = Number(pm.collectionVariables.get('resumeAfterId'));",
+              "const ids = [...body.matchAll(/^id:\\s*(\\d+)\\s*$/gm)].map(match => Number(match[1]));",
+              "pm.test('Reconnect replays only newer events', function () {",
+              "  pm.expect(ids.length).to.be.above(0);",
+              "  pm.expect(ids.every(id => id > after)).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "text/event-stream" },
+          { "key": "Last-Event-ID", "value": "{{resumeAfterId}}" }
+        ],
+        "url": "{{baseUrl}}/runs/{{runId}}/stream"
+      }
+    },
+    {
+      "name": "Get report",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  const body = pm.response.json();",
+              "  pm.test('Report matches VERA proof schema and has usage metadata', function () {",
+              "    pm.expect(body.schema_version).to.eql('1.0');",
+              "    pm.expect(body.run_id).to.eql(pm.collectionVariables.get('runId'));",
+              "    pm.expect(body.trace.provider).to.be.a('string').and.not.empty;",
+              "    pm.expect(body.trace.input_tokens).to.be.at.least(0);",
+              "    pm.expect(body.trace.output_tokens).to.be.at.least(0);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/reports/{{reportId}}"
+      }
+    },
+    {
+      "name": "Forbidden Origin",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "https://evil.example" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"display_name\": \"Should not be accepted\"\n}"
+        },
+        "url": "{{baseUrl}}/me"
+      }
+    },
+    {
+      "name": "Auth error - invalid login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"invalid-password\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Auth error - duplicate email",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"display_name\": \"Duplicate\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register"
+      }
+    },
+    {
+      "name": "Register second user",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('emailB', 'vera-isolation+' + Date.now() + '@example.com');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 201 && type.toLowerCase().includes('application/json')) {",
+              "  const cookie = pm.cookies.get('vera_session');",
+              "  pm.test('Second user receives its own session cookie', function () { pm.expect(cookie).to.be.a('string').and.not.empty; });",
+              "  if (cookie) pm.collectionVariables.set('sessionB', cookie);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"password\": \"{{password}}\",\n  \"display_name\": \"Isolation User\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/register"
+      }
+    },
+    {
+      "name": "Isolation - other user cannot access run",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Cookie", "value": "vera_session={{sessionB}}" }
+        ],
+        "url": "{{baseUrl}}/runs/{{runId}}"
+      }
+    },
+    {
+      "name": "Login owner again",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  const cookie = pm.cookies.get('vera_session');",
+              "  pm.test('Owner login resets the active cookie', function () { pm.expect(cookie).to.be.a('string').and.not.empty; });",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Delete run",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "url": "{{baseUrl}}/runs/{{runId}}"
+      }
+    },
+    {
+      "name": "Deleted run is inaccessible",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/runs/{{runId}}"
+      }
+    },
+    {
+      "name": "Deleted report is inaccessible",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/reports/{{reportId}}"
+      }
+    },
+    {
+      "name": "Change password",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"current_password\": \"{{password}}\",\n  \"new_password\": \"{{newPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/me/password"
+      }
+    },
+    {
+      "name": "Login after password change",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  pm.collectionVariables.set('password', pm.collectionVariables.get('newPassword'));",
+              "  const cookie = pm.cookies.get('vera_session');",
+              "  pm.test('New password opens a new session', function () { pm.expect(cookie).to.be.a('string').and.not.empty; });",
+              "  if (cookie) pm.collectionVariables.set('sessionAfterPasswordChange', cookie);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{newPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Open second owner session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const type = pm.response.headers.get('Content-Type') || '';",
+              "if (pm.response.code === 200 && type.toLowerCase().includes('application/json')) {",
+              "  const cookie = pm.cookies.get('vera_session');",
+              "  pm.test('Second active owner session is issued', function () { pm.expect(cookie).to.be.a('string').and.not.empty; });",
+              "  if (cookie) pm.collectionVariables.set('sessionSecondAfterPasswordChange', cookie);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{newPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Delete account",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Origin", "value": "http://localhost:8080" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": "{{baseUrl}}/me"
+      }
+    },
+    {
+      "name": "Old registration session revoked",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Cookie", "value": "vera_session={{sessionARegistration}}" }
+        ],
+        "url": "{{baseUrl}}/me"
+      }
+    },
+    {
+      "name": "Previous session revoked",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Cookie", "value": "vera_session={{sessionAfterPasswordChange}}" }
+        ],
+        "url": "{{baseUrl}}/me"
+      }
+    },
+    {
+      "name": "Latest session revoked",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Cookie", "value": "vera_session={{sessionSecondAfterPasswordChange}}" }
+        ],
+        "url": "{{baseUrl}}/me"
+      }
+    }
+  ]
+}
