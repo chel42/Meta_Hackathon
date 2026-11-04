@@ -59,15 +59,17 @@ Migrations Alembic. Toute requête sur `runs`, `reports`, `submissions` filtre p
 | `GET /reports/{id}` | Preuve VERA (JSON) |
 | `GET /health` | Santé, sans information sensible |
 
-**Énumérations** : `status` = `queued`, `running`, `completed`, `failed` · `current_step` = `intake`, `claim_extraction`, `investigation`, `source_verification`, `media_analysis`, `report_generation` · verdict = `supported`, `contradicted`, `unverifiable` · contrôle de source = `confirmed`, `not_confirmed`, `unreachable`.
+**Énumérations** : `status` = `queued`, `running`, `completed`, `failed` · `current_step` = `intake`, `url_research`, `claim_extraction`, `investigation`, `source_verification`, `media_analysis`, `report_generation` · verdict = `supported`, `contradicted`, `unverifiable` · contrôle de source = `confirmed`, `not_confirmed`, `unreachable`.
 
 **Erreurs** : `{ "error": { "code", "message", "request_id" } }` avec 401 `unauthenticated`, 403 `forbidden`, 404 `not_found`, 409 `email_taken`, 413 `payload_too_large`, 422 `invalid_input`, 429 `rate_limited`, 503 `provider_unavailable`.
 
 ## 6. Exécution d'un run
 
-Pipeline : **intake** → **extraction** (3 affirmations atomiques au plus ; les opinions sont `unverifiable` sans recherche) → **recherche** (une requête par affirmation, en parallèle) → **contrôle des sources** → **rapport**.
+Pipeline : pour un texte, **intake** → **extraction** (3 affirmations atomiques au plus) → **recherche** (une requête par affirmation, 3 simultanées au plus) → **contrôle des sources** → **rapport**. Pour une URL, la recherche web consulte d'abord la page et fournit le contenu à l'extraction ; l'URL n'est jamais téléchargée directement par l'API.
 
 **Contrôle des sources (V0)** : une source citée n'est `confirmed` que si son URL figure dans les résultats bruts de la recherche. **Verdict** : aucune source confirmée → `unverifiable` ; `contradicted` seulement si une source confirmée contredit.
+
+Le plafond est réservé avant chaque appel, y compris les appels en parallèle, à partir des tarifs configurés et des limites de jetons/recherche. En mode Meta (`MOCK_PROVIDER=0`), les trois variables `TOKEN_INPUT_USD_PER_MILLION`, `TOKEN_OUTPUT_USD_PER_MILLION` et `SEARCH_USD` sont obligatoires et au moins un tarif doit être strictement positif. Si le fournisseur ne retourne pas sa consommation, aucune nouvelle requête payante n'est lancée et `trace.budget_used` reste `null` plutôt que d'afficher un coût nul.
 
 Événements SSE (`id` = `seq` du run) : `run.started`, `step.started`, `step.completed`, `claims.extracted`, `source.found`, `claim.verdict`, `budget.update`, `report.ready` (`report_id`), `run.failed` (`code`, `retryable`). Le flux se ferme après `report.ready` ou `run.failed`.
 
@@ -100,7 +102,7 @@ Interface unique : `generate_json`, `generate_text`, `grounded_search` (réponse
 
 Points de la documentation Meta à respecter :
 - URL `https://api.meta.ai/v1`, SDK OpenAI compatible, modèle `muse-spark-1.3` en **mode Standard** (jamais `-contributor` pour du contenu utilisateur).
-- Recherche : outil `web_search` sur `/v1/responses` uniquement, avec `include: ["web_search_call.results"]` ; citations en annotations `url_citation`.
+- Recherche : outil `web_search` sur `/v1/responses` uniquement, `max_tool_calls=2` et `include: ["web_search_call.results"]` ; les tests A-01 doivent confirmer l'acceptation de ce plafond par Meta. Citations en annotations `url_citation`.
 - Le modèle décide de chercher : vérifier la présence d'un appel de recherche, relancer une fois, sinon `unverifiable`.
 - Une affirmation par requête (la recherche multi-étapes est moins fiable) ; `max_output_tokens` d'au moins 4 000.
 - Sorties JSON : Chat Completions avec `response_format` `json_schema` ; recherche : Responses API. Les deux surfaces ne sont jamais mélangées.
@@ -108,7 +110,7 @@ Points de la documentation Meta à respecter :
 
 ## 9. Garde-fous
 
-Entrée ≤ 8 000 caractères ; 3 affirmations ; 2 recherches par affirmation ; 3 runs simultanés ; run limité à 180 s et 0,50 USD ; 20 soumissions par heure et par utilisateur ; image ≤ 5 Mo. Le backend **ne télécharge aucune URL** (elle est transmise à la recherche). Le contenu soumis et les pages web sont traités comme données non fiables ; toute sortie est validée par schéma ; les agents n'ont aucun outil à effet de bord. Conservation 7 jours, purge au démarrage puis toutes les heures ; journaux sans contenu intégral ; aucun secret dans le dépôt.
+Entrée ≤ 8 000 caractères ; 3 affirmations ; 2 recherches par affirmation ; 3 runs simultanés ; run limité à 180 s et 0,50 USD ; 20 soumissions par heure et par utilisateur ; image ≤ 5 Mo (Nginx accepte jusqu'à 6 Mo pour la surcharge multipart). Le backend **ne télécharge aucune URL** (elle est transmise à la recherche). Le contenu soumis et les pages web sont traités comme données non fiables ; toute sortie est validée par schéma ; les agents n'ont aucun outil à effet de bord. Conservation 7 jours, purge au démarrage puis toutes les heures ; journaux sans contenu intégral ; aucun secret dans le dépôt.
 
 ## 10. Tâches Backend
 

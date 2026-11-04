@@ -19,13 +19,19 @@ get_settings.cache_clear()
 
 
 @pytest.fixture
-async def client() -> AsyncIterator[AsyncClient]:
+async def client(tmp_path) -> AsyncIterator[AsyncClient]:
     from app.main import app
 
-    async with app.router.lifespan_context(app):
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as http:
-            yield http
+    settings = get_settings()
+    original_database_url = settings.database_url
+    settings.database_url = f"sqlite+aiosqlite:///{tmp_path / 'vera.db'}"
+    try:
+        async with app.router.lifespan_context(app):
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as http:
+                yield http
+    finally:
+        settings.database_url = original_database_url
 
 
 async def signup_user(client: AsyncClient, email: str, password: str = "password12") -> AsyncClient:

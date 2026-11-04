@@ -46,17 +46,23 @@ class RunManager:
 
     async def recover_interrupted(self) -> int:
         async with self.session_factory() as session:
-            result = await session.execute(
-                update(Run)
-                .where(Run.status.in_(("queued", "running")))
-                .values(
-                    status="failed",
-                    error_code="interrupted",
-                    finished_at=utc_now(),
+            run_ids = list(
+                await session.scalars(
+                    select(Run.id).where(Run.status.in_(("queued", "running")))
                 )
             )
-            await session.commit()
-            return result.rowcount or 0
+        for run_id in run_ids:
+            await self.event_bus.emit(
+                run_id,
+                "run.failed",
+                {"code": "interrupted", "retryable": False},
+                run_update={
+                    "status": "failed",
+                    "error_code": "interrupted",
+                    "finished_at": utc_now(),
+                },
+            )
+        return len(run_ids)
 
     async def submit(
         self,
@@ -112,7 +118,11 @@ class RunManager:
                     if event_type == "step.started" and step:
                         await self._set_run(run_id, current_step=str(step))
                 if event_type == "budget.update":
-                    await self._set_run(run_id, budget_used=float((payload or {}).get("budget_used", 0)))
+                    value = (payload or {}).get("budget_used")
+                    await self._set_run(
+                        run_id,
+                        budget_used=float(value) if value is not None else None,
+                    )
                 await self.event_bus.emit(run_id, event_type, payload or {})
 
             try:
@@ -128,24 +138,30 @@ class RunManager:
                     timeout=self.settings.run_timeout_seconds,
                 )
                 await self._persist_report(run_id, result.report)
-                await emit("report.ready", {"report_id": result.report.report_id})
-                await self._set_run(
+                await self.event_bus.emit(
                     run_id,
-                    status="completed",
-                    current_step="report_generation",
-                    report_id=result.report.report_id,
-                    budget_used=result.report.trace.budget_used,
-                    finished_at=utc_now(),
+                    "report.ready",
+                    {"report_id": result.report.report_id},
+                    run_update={
+                        "status": "completed",
+                        "current_step": "report_generation",
+                        "report_id": result.report.report_id,
+                        "budget_used": result.report.trace.budget_used,
+                        "finished_at": utc_now(),
+                    },
                 )
             except Exception as exc:
                 code = "interrupted" if isinstance(exc, TimeoutError | asyncio.TimeoutError) else "provider_unavailable"
                 logger.exception("Run %s failed", run_id)
-                await self.event_bus.emit(run_id, "run.failed", {"code": code, "retryable": code != "interrupted"})
-                await self._set_run(
+                await self.event_bus.emit(
                     run_id,
-                    status="failed",
-                    error_code=code,
-                    finished_at=utc_now(),
+                    "run.failed",
+                    {"code": code, "retryable": code != "interrupted"},
+                    run_update={
+                        "status": "failed",
+                        "error_code": code,
+                        "finished_at": utc_now(),
+                    },
                 )
             finally:
                 self.event_bus.close(run_id)

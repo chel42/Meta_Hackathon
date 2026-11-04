@@ -12,6 +12,7 @@ from pathlib import Path
 import time
 
 from app.agents.pipeline import AgentPipeline
+from app.core.config import Settings
 from app.providers.factory import create_provider
 
 CASES = Path(__file__).resolve().parents[1] / "eval" / "cases.json"
@@ -66,7 +67,14 @@ async def evaluate(output: Path) -> dict:
     if len(cases) != 24:
         raise ValueError(f"Expected 24 evaluation cases, found {len(cases)}")
 
-    pipeline = AgentPipeline(create_provider())
+    settings = Settings()
+    pipeline = AgentPipeline(
+        create_provider(),
+        budget_usd=settings.run_budget_usd,
+        token_input_usd_per_million=settings.token_input_usd_per_million,
+        token_output_usd_per_million=settings.token_output_usd_per_million,
+        search_usd=settings.search_usd,
+    )
     rows = []
     citation_checks = 0
     valid_citations = 0
@@ -135,8 +143,10 @@ async def evaluate(output: Path) -> dict:
             ),
             "claim_checks": claim_checks,
             "latency_s_total": round(total_latency, 3),
-            "budget_used_total": round(
-                sum(row["budget_used"] for row in rows), 6
+            "budget_used_total": (
+                round(sum(row["budget_used"] for row in rows), 6)
+                if all(row["budget_used"] is not None for row in rows)
+                else None
             ),
             "input_tokens_total": sum(row["input_tokens"] for row in rows),
             "output_tokens_total": sum(row["output_tokens"] for row in rows),

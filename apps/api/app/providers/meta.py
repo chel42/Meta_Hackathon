@@ -157,6 +157,7 @@ class MetaProvider:
             input=prompt,
             max_output_tokens=4000,
             tools=[{"type": "web_search", "search_context_size": "medium"}],
+            max_tool_calls=2,
             include=["web_search_call.results"],
             timeout=timeout,
         )

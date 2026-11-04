@@ -98,6 +98,8 @@ async def test_sse_replay_has_stable_ids(client: AsyncClient, signup, wait_compl
     assert len(ids) == len(set(ids))
     resumed = await read_events(last_id=ids[0])
     assert [item[0] for item in resumed] == ids[1:]
+    after_terminal = await read_events(last_id=ids[-1])
+    assert after_terminal == []
 
 
 @pytest.mark.asyncio
@@ -107,6 +109,19 @@ async def test_invalid_submission_and_unauthenticated(client: AsyncClient, signu
     await signup(client, "valid@example.com")
     empty = await client.post("/api/v1/submissions", json={"type": "text", "content": ""})
     assert empty.status_code == 422
+    malformed = await client.post(
+        "/api/v1/submissions",
+        content=b'{"type":',
+        headers={"content-type": "application/json"},
+    )
+    assert malformed.status_code == 422
+    assert malformed.json()["error"]["code"] == "invalid_input"
+    invalid_encoding = await client.post(
+        "/api/v1/submissions",
+        content=b"\xff",
+        headers={"content-type": "application/json"},
+    )
+    assert invalid_encoding.status_code == 422
     huge = await client.post("/api/v1/submissions", json={"type": "text", "content": "a" * 8001})
     assert huge.status_code == 422
 

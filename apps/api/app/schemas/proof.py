@@ -49,7 +49,7 @@ class Trace(ProofModel):
     provider: str
     model: str
     search_calls: int = Field(ge=0)
-    budget_used: float = Field(ge=0)
+    budget_used: float | None = Field(default=None, ge=0)
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
 

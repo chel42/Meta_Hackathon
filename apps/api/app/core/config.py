@@ -4,7 +4,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
 
     database_url: str = "sqlite+aiosqlite:///./vera.db"
     cookie_secure: bool = False
@@ -26,9 +30,9 @@ class Settings(BaseSettings):
     meta_base_url: str = "https://api.meta.ai/v1"
     meta_model: str = "muse-spark-1.3"
     run_budget_usd: float = 0.50
-    token_input_usd_per_million: float = 0.0
-    token_output_usd_per_million: float = 0.0
-    search_usd: float = 0.0
+    token_input_usd_per_million: float | None = None
+    token_output_usd_per_million: float | None = None
+    search_usd: float | None = None
     fallback_model_api_key: str = ""
     fallback_meta_base_url: str = "https://api.meta.ai/v1"
     fallback_meta_model: str = "muse-spark-1.3"

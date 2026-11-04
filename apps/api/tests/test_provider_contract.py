@@ -130,7 +130,10 @@ async def test_fallback_records_actual_provider_and_usage(status_code: int) -> N
 
     fallback = FakeProvider()
     result = await AgentPipeline(
-        FallbackProvider(FailingProvider(), fallback)
+        FallbackProvider(FailingProvider(), fallback),
+        token_input_usd_per_million=1,
+        token_output_usd_per_million=1,
+        search_usd=0.01,
     ).run("Paris est la capitale de la France.")
 
     assert result.report.trace.provider == "fake"

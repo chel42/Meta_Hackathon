@@ -32,10 +32,12 @@ class ReportBuilder:
         provider: str,
         model: str,
         search_calls: int,
-        budget_used: float,
+        budget_used: float | None,
         input_tokens: int = 0,
         output_tokens: int = 0,
         partial: bool = False,
+        budget_unmeasurable: bool = False,
+        additional_limits: list[str] | None = None,
         extraction_failed: bool = False,
         media_analysis: MediaAnalysis | None = None,
     ) -> ProofReport:
@@ -74,6 +76,9 @@ class ReportBuilder:
             limits.append("extraction des affirmations non validée")
         if partial:
             limits.append("rapport partiel : budget maximal atteint")
+        if budget_unmeasurable:
+            limits.append("consommation fournisseur non mesurable")
+        limits.extend(additional_limits or [])
         if any(source.status != "confirmed" for source in sources):
             limits.append("certaines sources citées n'ont pas été confirmées dans les résultats bruts")
         contradicted = any(claim.verdict == "contradicted" for claim in proof_claims)

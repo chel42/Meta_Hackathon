@@ -70,7 +70,7 @@ class Run(Base):
     submission_id: Mapped[str] = mapped_column(ForeignKey("submissions.id", ondelete="CASCADE"))
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
     current_step: Mapped[str] = mapped_column(String(32), default="intake")
-    budget_used: Mapped[float] = mapped_column(Float, default=0.0)
+    budget_used: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     report_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)

@@ -26,19 +26,12 @@ class VerdictJudge:
                 limits=["aucune source confirmée"],
             ), Usage()
 
-        source_text = "\n".join(
-            f"- source_id={source.source_id}; domaine={urlsplit(str(source.url)).hostname}; "
-            f"date=non disponible; snippet={source.snippet[:600]}"
-            for source in confirmed
-        )
+        user_prompt = self.user_prompt(claim, confirmed, language)
         candidate, usage = await self.provider.generate_json(
             schema_name="ClaimVerdict",
             output_model=ClaimVerdict,
             system_prompt=load_prompt("verdict_judge"),
-            user_prompt=(
-                f"Langue : {language}\nAffirmation : {claim}\n"
-                f"Sources confirmées uniquement :\n{source_text}"
-            ),
+            user_prompt=user_prompt,
             reasoning_effort="medium",
             timeout=45,
         )
@@ -66,3 +59,15 @@ class VerdictJudge:
             if not any(item in limits for item in ("aucune preuve exploitable", "extraits non vérifiables")):
                 limits.append("extraits non vérifiables")
         return candidate.model_copy(update={"verdict": verdict, "evidence": evidence, "limits": limits}), usage
+
+    @staticmethod
+    def user_prompt(claim: str, sources: list[SourceCheck], language: str = "fr") -> str:
+        source_text = "\n".join(
+            f"- source_id={source.source_id}; domaine={urlsplit(str(source.url)).hostname}; "
+            f"date=non disponible; snippet={source.snippet[:600]}"
+            for source in sources
+        )
+        return (
+            f"Langue : {language}\nAffirmation : {claim}\n"
+            f"Sources confirmées uniquement :\n{source_text}"
+        )

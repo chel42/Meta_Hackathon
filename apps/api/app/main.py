@@ -83,6 +83,11 @@ async def lifespan(app: FastAPI):
             await purge_task
         except asyncio.CancelledError:
             pass
+        run_tasks = list(app.state.run_manager.tasks)
+        for task in run_tasks:
+            task.cancel()
+        if run_tasks:
+            await asyncio.gather(*run_tasks, return_exceptions=True)
         app.state.runtime_initialized = False
         if db_session.engine is not None:
             await db_session.engine.dispose()

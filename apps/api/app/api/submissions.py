@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, Request
 from pydantic import ValidationError
 
@@ -37,7 +39,7 @@ async def create_submission(
     else:
         try:
             payload = SubmissionRequest.model_validate(await request.json())
-        except ValidationError as exc:
+        except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ApiError(422, "invalid_input", "The request payload is invalid") from exc
         content_type = payload.type
         text = payload.content

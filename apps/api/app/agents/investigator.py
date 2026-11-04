@@ -11,11 +11,33 @@ class Investigator:
 
     async def investigate(self, claim: str, language: str = "fr") -> tuple[Investigation, Usage]:
         system = load_prompt("investigator")
-        prompt = (
-            f"Langue de réponse : {language}\nAffirmation : {claim}\n"
+        prompt = self._format_prompt(
+            language,
+            f"Affirmation : {claim}\n"
             "Cherche des sources fiables et datées sur cette affirmation, y compris "
-            "des sources qui la contredisent. Cite chaque source."
+            "des sources qui la contredisent. Cite chaque source.",
         )
+        return await self._search_with_retry(system, prompt)
+
+    async def investigate_url(self, url: str, language: str = "fr") -> tuple[Investigation, Usage]:
+        system = load_prompt("investigator")
+        prompt = self._format_prompt(
+            language,
+            f"URL à examiner : {url}\n"
+            "Utilise la recherche web pour consulter cette page et en extraire les "
+            "affirmations factuelles vérifiables. Résume les affirmations sans les "
+            "présenter comme établies, et cite les sources consultées. Si la page "
+            "n'est pas accessible par la recherche, indique-le explicitement.",
+        )
+        return await self._search_with_retry(system, prompt)
+
+    @staticmethod
+    def _format_prompt(language: str, task: str) -> str:
+        return f"Langue de réponse : {language}\n{task}"
+
+    async def _search_with_retry(
+        self, system: str, prompt: str
+    ) -> tuple[Investigation, Usage]:
         investigation, usage = await self.provider.grounded_search(
             prompt=f"{system}\n\n{prompt}", timeout=90
         )
