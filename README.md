@@ -1,6 +1,6 @@
-# VERA
+# TRAUNES AI
 
-VERA transforme un texte ou un lien en dossier de vérification : affirmations examinées, sources et limites. Il ne rend pas de verdict absolu.
+TRAUNES AI transforme un texte ou un lien en dossier de vérification : affirmations examinées, sources et limites. Il ne rend pas de verdict absolu.
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)
@@ -21,16 +21,18 @@ VERA transforme un texte ou un lien en dossier de vérification : affirmations e
 | IA | Meta Model API (`muse-spark-1.3`), providers Meta et Fake |
 | Infrastructure | Docker Compose, Nginx |
 
-> PostgreSQL, l'authentification et les routes métier sont prévus dans l'architecture, mais ne sont pas encore intégrés au squelette actuel.
+> L'API disponible sur `main` expose actuellement le contrôle de santé. L'interface Web reprise est une démonstration autonome ; l'intégration aux routes métier reste à réaliser.
 
 ## État du projet
 
-Le dépôt contient le squelette de la chaîne d'agents, une page Expo Web et les fichiers Docker. L'API expose uniquement `/api/v1/health`. L'authentification, les modèles et migrations, les routes métier, le flux SSE et les parcours complets restent à développer. Le projet n'est pas prêt pour la production.
+Le dépôt contient la chaîne d'agents et reprend dans `apps/web` le frontend fourni (écrans, logo, composants et assets TRAUNES AI). Cette interface reste une démonstration : ses parcours utilisent des données simulées et `localStorage`, sans intégration aux routes métier. L'API sur `main` expose actuellement uniquement `/api/v1/health`. Le projet n'est pas prêt pour la production.
+
+Les noms techniques persistants (base et rôle PostgreSQL, cookie, clés de stockage local, slug et scheme Expo, service Render) restent inchangés pour préserver la compatibilité.
 
 ## Structure
 
 ```text
-vera/
+traunes-ai/
 ├─ apps/
 │  ├─ api/                 # API FastAPI, agents, providers et tests
 │  └─ web/                 # Client Expo Web
@@ -49,8 +51,8 @@ vera/
 Prérequis : Docker et Docker Compose.
 
 ```powershell
-git clone <url-du-depot> vera
-Set-Location vera
+git clone <url-du-depot> traunes-ai
+Set-Location traunes-ai
 Copy-Item .env.example .env
 # Remplacez change-me-local dans POSTGRES_PASSWORD et DATABASE_URL
 docker compose up --build
@@ -71,6 +73,7 @@ Dans un terminal, depuis la racine du dépôt :
 ```powershell
 Set-Location apps\api
 python -m pip install -e ".[dev]"
+$env:ALLOWED_ORIGINS = "http://localhost:8081,http://127.0.0.1:8081"
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
@@ -82,6 +85,10 @@ npm install
 npm run web
 ```
 
+Le frontend fourni fonctionne actuellement avec ses données de démonstration locales et n'appelle pas encore l'API.
+
+Le frontend peut être vérifié avec `npm run typecheck` et exporté pour le Web avec `npm run export`, depuis `apps\web`.
+
 ## Tests
 
 Depuis `apps\api` :
@@ -89,6 +96,13 @@ Depuis `apps\api` :
 ```powershell
 python -m pip install -e ".[dev]"
 python -m pytest
+```
+
+Depuis `apps\web` :
+
+```powershell
+npm run typecheck
+npm run export
 ```
 
 ## Intégration continue

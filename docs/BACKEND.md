@@ -1,10 +1,10 @@
-# VERA — Backend (Beta)
+# TRAUNES AI — Backend (Beta)
 
 FastAPI · Python 3.12 · PostgreSQL 16 · SSE. Échéance du dépôt : 5 nov. 2026, 02h00 UTC (à reconfirmer sur la page officielle). Tâches classées **P0** (indispensable) et **P1**.
 
 ## 1. Périmètre
 
-- **P0** : compte e-mail + mot de passe, sessions, soumission texte ou lien, run asynchrone, flux SSE, Preuve VERA, historique par utilisateur.
+- **P0** : compte e-mail + mot de passe, sessions, soumission texte ou lien, run asynchrone, flux SSE, preuve TRAUNES AI, historique par utilisateur.
 - **P1** : profil (modification, mot de passe, suppression de compte), image, évaluation, purge, fournisseur de repli.
 - **Hors Beta** : OAuth, vérification d'e-mail, mot de passe oublié, vidéo et audio, file de jobs distribuée, rôles admin.
 
@@ -56,7 +56,7 @@ Migrations Alembic. Toute requête sur `runs`, `reports`, `submissions` filtre p
 | `GET /runs/{id}` | `status`, `current_step`, `budget_used`, `report_id`, `error` |
 | `GET /runs/{id}/stream` | Flux SSE (`Last-Event-ID` géré, rejeu depuis `trace_events`) |
 | `DELETE /runs/{id}` | Supprime une vérification (P1) |
-| `GET /reports/{id}` | Preuve VERA (JSON) |
+| `GET /reports/{id}` | Preuve TRAUNES AI (JSON) |
 | `GET /health` | Santé, sans information sensible |
 
 **Énumérations** : `status` = `queued`, `running`, `completed`, `failed` · `current_step` = `intake`, `claim_extraction`, `investigation`, `source_verification`, `media_analysis`, `report_generation` · verdict = `supported`, `contradicted`, `unverifiable` · contrôle de source = `confirmed`, `not_confirmed`, `unreachable`.
@@ -71,7 +71,7 @@ Pipeline : **intake** → **extraction** (3 affirmations atomiques au plus ; les
 
 Événements SSE (`id` = `seq` du run) : `run.started`, `step.started`, `step.completed`, `claims.extracted`, `source.found`, `claim.verdict`, `budget.update`, `report.ready` (`report_id`), `run.failed` (`code`, `retryable`). Le flux se ferme après `report.ready` ou `run.failed`.
 
-## 7. Preuve VERA (`schema_version` 1.0)
+## 7. Preuve TRAUNES AI (`schema_version` 1.0)
 
 ```json
 {

@@ -11,7 +11,7 @@ T = TypeVar("T", bound=BaseModel)
 
 class FakeProvider:
     name = "fake"
-    model = "fake-vera-v1"
+    model = "fake-traunes-ai-v1"
 
     def __init__(
         self,
