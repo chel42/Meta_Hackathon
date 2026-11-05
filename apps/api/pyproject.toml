@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "vera-api"
+name = "traunes-ai-api"
 version = "0.1.0"
-description = "VERA evidence verification API"
+description = "TRAUNES AI evidence verification API"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1",

@@ -1,4 +1,4 @@
-# VERA — Agents IA et intégration Meta (Beta)
+# TRAUNES AI — Agents IA et intégration Meta (Beta)
 
 Cœur du produit. Complète `BACKEND.md` §6 et §8. Tâches **A-01 à A-09** (détail des tickets B-05, B-06, B-13, B-14).
 

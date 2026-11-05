@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "VERA",
+    "name": "TRAUNES AI",
     "slug": "vera",
     "scheme": "vera",
     "version": "0.1.0",
@@ -10,6 +10,7 @@
       "bundler": "metro",
       "output": "static"
     },
-    "plugins": ["expo-router"]
+    "plugins": ["expo-router"],
+    "platforms": ["web"]
   }
 }

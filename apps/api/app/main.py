@@ -8,7 +8,7 @@ from app.core.run_manager import RunManager
 from app.providers.factory import create_provider
 
 app = FastAPI(
-    title="VERA API",
+    title="TRAUNES AI API",
     version="0.1.0",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
